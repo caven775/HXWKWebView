@@ -104,7 +104,11 @@ DHWKWebViewKVOName const DHWKWebViewEstimatedProgress = @"estimatedProgress";
         [scheme rangeOfString:@"itmss"].location != NSNotFound) {
         //open App Store
         if ([[UIApplication sharedApplication] canOpenURL:navigationAction.request.URL]) {
-            [[UIApplication sharedApplication] openURL:navigationAction.request.URL options:@{} completionHandler:nil];
+            if (@available(iOS 10.0, *)) {
+                [[UIApplication sharedApplication] openURL:navigationAction.request.URL options:@{} completionHandler:nil];
+            } else {
+                [[UIApplication sharedApplication] openURL:navigationAction.request.URL];
+            }
         }
     }
     [self dh_webView:webView decidePolicyForNavigationAction:navigationAction decisionHandler:decisionHandler];
