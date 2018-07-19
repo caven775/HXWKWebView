@@ -19,6 +19,7 @@ DHWKWebViewKVOName const DHWKWebViewEstimatedProgress = @"estimatedProgress";
 
 @property (nonatomic, strong) WKWebView * webView;
 @property (nonatomic, copy) NSArray <DHOCFunctionName>* functions;
+@property (nonatomic, strong) NSMutableArray <NSURLRequest *>* allRequests;
 @property (nonatomic, strong) WKWebViewConfiguration * webViewConfiguration;
 @property (nonatomic, strong) WKUserContentController * userContentController;
 
@@ -75,6 +76,55 @@ DHWKWebViewKVOName const DHWKWebViewEstimatedProgress = @"estimatedProgress";
     [self.webView addObserver:self forKeyPath:DHWKWebViewEstimatedProgress options:NSKeyValueObservingOptionNew context:nil];
 }
 
+#pragma mark  Function 
+
+- (void)dh_addUserScript:(WKUserScript *)script
+{
+    [self.webView.configuration.userContentController addUserScript:script];
+}
+
+- (void)dh_jsCallOCFunction:(NSArray<DHOCFunctionName> *)functions
+{
+    for (DHOCFunctionName name in functions) {
+        [self.webView.configuration.userContentController addScriptMessageHandler:self name:name];
+    }
+    self.functions = functions;
+}
+
+- (void)dh_cleanCache
+{
+    NSDate * startDate = [NSDate dateWithTimeIntervalSince1970:0];
+    if (@available(iOS 9.0, *)) {
+        WKWebsiteDataStore * dataStore = [WKWebsiteDataStore defaultDataStore];
+        NSSet * dataTypes = [WKWebsiteDataStore allWebsiteDataTypes];
+        [dataStore fetchDataRecordsOfTypes:dataTypes completionHandler:^(NSArray<WKWebsiteDataRecord *> * dataRecords) {
+            [dataStore removeDataOfTypes:dataTypes forDataRecords:dataRecords completionHandler:^{
+                //再次清理
+                [dataStore removeDataOfTypes:dataTypes modifiedSince:startDate completionHandler:^{
+                }];
+            }];
+        }];
+    }
+    
+    if (@available(iOS 11.0, *)) {
+        WKWebsiteDataStore * dataStore = [WKWebsiteDataStore defaultDataStore];
+        [[dataStore httpCookieStore] getAllCookies:^(NSArray<NSHTTPCookie *> * cookies) {
+            [cookies enumerateObjectsUsingBlock:^(NSHTTPCookie * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+                [[dataStore httpCookieStore] deleteCookie:obj completionHandler:nil];
+            }];
+        }];
+    }
+    
+    NSURLCache * urlCache = [NSURLCache sharedURLCache];
+    NSHTTPCookieStorage * cookieStorge = [NSHTTPCookieStorage sharedHTTPCookieStorage];
+    [self.allRequests enumerateObjectsUsingBlock:^(NSURLRequest * _Nonnull request, NSUInteger idx, BOOL * _Nonnull stop) {
+        [[cookieStorge cookiesForURL:request.URL] enumerateObjectsUsingBlock:^(NSHTTPCookie * _Nonnull cookie, NSUInteger idx, BOOL * _Nonnull stop) {
+            [cookieStorge deleteCookie:cookie];
+        }];
+        [urlCache removeCachedResponseForRequest:request];
+    }];
+}
+
 #pragma mark  WKNavigationDelegate 
 
 - (void)webView:(WKWebView *)webView didCommitNavigation:(WKNavigation *)navigation
@@ -111,6 +161,7 @@ DHWKWebViewKVOName const DHWKWebViewEstimatedProgress = @"estimatedProgress";
             }
         }
     }
+    [self.allRequests addObject:navigationAction.request];
     [self dh_webView:webView decidePolicyForNavigationAction:navigationAction decisionHandler:decisionHandler];
     decisionHandler(WKNavigationActionPolicyAllow);
 }
@@ -127,21 +178,6 @@ DHWKWebViewKVOName const DHWKWebViewEstimatedProgress = @"estimatedProgress";
     } else {
         completionHandler(NSURLSessionAuthChallengeCancelAuthenticationChallenge, nil);
     }
-}
-
-#pragma mark  CallFunction 
-
-- (void)dh_addUserScript:(WKUserScript *)script
-{
-    [self.webView.configuration.userContentController addUserScript:script];
-}
-
-- (void)dh_jsCallOCFunction:(NSArray<DHOCFunctionName> *)functions
-{
-    for (DHOCFunctionName name in functions) {
-        [self.webView.configuration.userContentController addScriptMessageHandler:self name:name];
-    }
-    self.functions = functions;
 }
 
 #pragma mark  WKScriptMessageHandler 
@@ -266,6 +302,14 @@ DHWKWebViewKVOName const DHWKWebViewEstimatedProgress = @"estimatedProgress";
         _contentWebView = _webView;
     }
     return _webView;
+}
+
+- (NSMutableArray<NSURLRequest *> *)allRequests
+{
+    if (!_allRequests) {
+        _allRequests = [[NSMutableArray alloc] initWithCapacity:0];
+    }
+    return _allRequests;
 }
 
 #pragma mark  dealloc 

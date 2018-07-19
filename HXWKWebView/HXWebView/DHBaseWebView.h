@@ -40,6 +40,11 @@ typedef NSString * DHOCFunctionName;
  */
 - (void)dh_jsCallOCFunction:(NSArray <DHOCFunctionName>*)functions;
 
+/**
+ 清理缓存
+ */
+- (void)dh_cleanCache;
+
 @end
 
 #pragma mark  DHBaseWebViewDelegate 
